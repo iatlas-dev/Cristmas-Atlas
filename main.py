@@ -43,7 +43,7 @@ class letter(StatesGroup):
 async def cmd_start(message: types.Message, state: FSMContext):
     sql.execute(f"SELECT * FROM users WHERE id = {message.from_user.id}")
     if sql.fetchone() is None:
-        sql.execute("INSERT INTO users VALUES (?,?,?,?)", (None, message.from_user.id, '000', 'True'))
+        sql.execute("INSERT INTO users VALUES (?,?,?,?)", (, message.from_user.id, json.dumps([]), 'True'))
         db.commit()
 
     
