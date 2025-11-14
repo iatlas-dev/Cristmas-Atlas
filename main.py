@@ -13,18 +13,18 @@ import pytz
 import sqlite3 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import time
-from PyRandomPassword.PyRandomPassword import RandomGeneratePassword as RandomPassword
 from aiogram.fsm.context import FSMContext
 from aiogram.filters.state import State, StatesGroup
 import requests
+import os 
 
 
 logging.basicConfig(level=logging.INFO)
 #8108818471:AAFlQ4YS8jiXS9tz11Z5qICIWrtQoUnEFcs official
 #7323299180:AAGjSoI3TvYGOVsnjCv7Zu_RDgTpIsm2iCU test
 bot = Bot(token="7323299180:AAGjSoI3TvYGOVsnjCv7Zu_RDgTpIsm2iCU")
-
 dp = Dispatcher()
+
 
 db = sqlite3.connect('user.db', check_same_thread = False)
 sql = db.cursor() 
@@ -32,26 +32,12 @@ db.commit()
 kyiv = pytz.timezone('Europe/Kyiv')
 scheduler = AsyncIOScheduler()
 letterId = []
-ad = [
-    "Не можешь придумать поздравление?🤔\nСпроси у chat gpt! https://t.me/GPTAppBot?start=_tgr_L5gBVf4wMzMy",
-    "Надо срочно купить или вывести звезды телеграм на подарок твоему другу🎁? Не проблема! https://t.me/starscat_bot?start=_tgr_-IzqPbw5ODli всегда надежно обменивайте свои звезды⭐️"
-]
-
-music = [
-    "Cristmas Atlas - All I Want for Christmas Is You.mp3",
-    "Cristmas Atlas - Deck The Halls.mp3",
-    "Cristmas Atlas - Happy New Year.mp3",
-    "Cristmas Atlas - Jingle Bell Rock.mp3",
-    "Cristmas Atlas - Last Cristmas.mp3",
-    "Cristmas Atlas - Let It Snow! Let It Snow! Let It Snow! (with The B. Swanson Quartet).mp3",
-    "Cristmas Atlas - Man With The Bag.mp3",
-    "Cristmas Atlas - Rockin' Around The Christmas Tree.mp3",
-    "Cristmas Atlas - Snowman.mp3",
-    "Cristmas Atlas - Щедрик.mp3",
-]
+music = os.listdir('music')
 
 class letter(StatesGroup):
     letter = State()
+
+
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
@@ -63,7 +49,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
                 if str(value[0]) == str(code):
                     code = random.randint(1000000,9999999)
             break
-        sql.execute(f"INSERT INTO users VALUES (?,?)", (str(code), json.dumps([])))
+        sql.execute("INSERT INTO users VALUES (?,?,?,?)", (None, '1323232', '000', 'True'))
         db.commit()
 
     sql.execute(f"SELECT * FROM users WHERE id = {message.from_user.id}")
