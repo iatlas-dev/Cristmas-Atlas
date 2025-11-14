@@ -21,8 +21,8 @@ import os
 
 logging.basicConfig(level=logging.INFO)
 #8108818471:AAFlQ4YS8jiXS9tz11Z5qICIWrtQoUnEFcs official
-#7323299180:AAGjSoI3TvYGOVsnjCv7Zu_RDgTpIsm2iCU test
-bot = Bot(token="7323299180:AAGjSoI3TvYGOVsnjCv7Zu_RDgTpIsm2iCU")
+#7323299180:AAGI8BXbwCxAjqz7umINVHVPrunnp-onASQ test
+bot = Bot(token="7323299180:AAGI8BXbwCxAjqz7umINVHVPrunnp-onASQ")
 dp = Dispatcher()
 
 
@@ -43,13 +43,7 @@ class letter(StatesGroup):
 async def cmd_start(message: types.Message, state: FSMContext):
     sql.execute(f"SELECT * FROM users WHERE id = {message.from_user.id}")
     if sql.fetchone() is None:
-        code = random.randint(1000000,9999999)
-        while (True):
-            for value in sql.execute("SELECT * FROM game"):
-                if str(value[0]) == str(code):
-                    code = random.randint(1000000,9999999)
-            break
-        sql.execute("INSERT INTO users VALUES (?,?,?,?)", (None, '1323232', '000', 'True'))
+        sql.execute("INSERT INTO users VALUES (?,?,?,?)", (None, message.from_user.id, '000', 'True'))
         db.commit()
 
     sql.execute(f"SELECT * FROM users WHERE id = {message.from_user.id}")
@@ -57,12 +51,12 @@ async def cmd_start(message: types.Message, state: FSMContext):
     value = list(value)
 
     date = [datetime.now().day, datetime.now().hour, datetime.now().minute, datetime.now().second]
-    day = 31 - datetime.now().day
+    day = 365 - datetime.now().timetuple().tm_yday
     hour = 23 - datetime.now().hour
     minute = 59 - datetime.now().minute
     second = 60 - datetime.now().second
-    code = value[1]
-    await message.answer(f"До нового года осталось🎄:\n{day} дней {hour} часов  {minute} минут {second} секунд!\nСсылка для вашей Тайной Санты🎅: https://t.me/ThisIsAtlas_Bot?start={code}")
+    code = value[0]
+    await message.answer(f"До нового года осталось🎄:\n{day} дней {hour} часов  {minute} минут {second} секунд!\n\nСсылка для вашей Тайной Санты🎅: https://t.me/ThisIsAtlas_Bot?start={str(code)}")
 
     if " " in message.text:
         code = message.text.split()[1]
@@ -106,21 +100,18 @@ async def letterMessage(message: types.Message, state: FSMContext):
             db.commit()
             await bot.send_message(i[1], f"Хохохо🎅 Это новое пожелание от Тайного Санты!\n{message.text}")
             await message.answer("Прекрасно! уже отправил поздравление!📧")
-            letterId.pop(a)
-            if random.randint(1,2) == 1:
-                await bot.send_message(message.chat.id, ad[random.randint(0,1)])
             await state.clear()
             return
         a += 1
 
 
 @dp.message(Command("music"))
-async def cmd_start(message: types.Message):
+async def cmd_music(message: types.Message):
     audio = FSInputFile(music[random.randint(0,9)])
     await bot.send_audio(message.chat.id, audio)
 
 @dp.message(Command("snow"))
-async def cmd_start(message: types.Message):
+async def cmd_snow(message: types.Message):
     time.sleep(0.2)
     city = message.text.split()[1]
     res = requests.get('http://api.openweathermap.org/data/2.5/forecast', params={'q': f'{city}', 'type': 'like', 'units': 'metric', 'APPID': '2b845cde2521735273dfaba14ada0b8f'})
@@ -141,20 +132,21 @@ async def cmd_start(message: types.Message):
     
     await message.answer("Печально😢 У тебя пока что не наблюдаеться снег")   
 
+dp.message(Command("settings"))
+async def cmd_settings(message: types.Message):
+    await message.answer("🎄Настройки Нового Года:")
+
 
 async def send_message_day():
     time.sleep(0.22)
-    date = [datetime.now().day, datetime.now().hour, datetime.now().minute, datetime.now().second]
-    day = 31 - datetime.now().day
-    hour = 23 - datetime.now().hour
-    minute = 59 - datetime.now().minute
-    second = 60 - datetime.now().second
+    day = 365 - datetime.now().timetuple().tm_yday
     text = f"До нового года осталось🎄:\n{int(day) - 1} дней 0 часов  0 минут 0 секунд"
     if day == 1:
         text = "С НОВЫМ ГОДОМ!🎆\nКанал автора бота: https:/t.me/AtlasForAmerica"
 
     for value in sql.execute("SELECT * FROM users"):
-        await bot.send_message(chat_id=value[0], text=text)
+        if value[3] == "True":
+            await bot.send_message(chat_id=value[0], text=text)
 
 
 
