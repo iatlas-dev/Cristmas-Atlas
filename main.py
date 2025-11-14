@@ -46,18 +46,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
         sql.execute("INSERT INTO users VALUES (?,?,?,?)", (None, message.from_user.id, '000', 'True'))
         db.commit()
 
-    sql.execute(f"SELECT * FROM users WHERE id = {message.from_user.id}")
-    value = sql.fetchone()
-    value = list(value)
-
-    date = [datetime.now().day, datetime.now().hour, datetime.now().minute, datetime.now().second]
-    day = 365 - datetime.now().timetuple().tm_yday
-    hour = 23 - datetime.now().hour
-    minute = 59 - datetime.now().minute
-    second = 60 - datetime.now().second
-    code = value[0]
-    await message.answer(f"До нового года осталось🎄:\n{day} дней {hour} часов  {minute} минут {second} секунд!\n\nСсылка для вашей Тайной Санты🎅: https://t.me/ThisIsAtlas_Bot?start={str(code)}")
-
+    
     if " " in message.text:
         code = message.text.split()[1]
     
@@ -81,11 +70,23 @@ async def cmd_start(message: types.Message, state: FSMContext):
         letterId.append([message.from_user.id, value[0]])
         await state.set_state(letter.letter.state)
 
+    else: 
+        sql.execute(f"SELECT * FROM users WHERE id = {message.from_user.id}")
+        value = sql.fetchone()
+        value = list(value)
+        
+        date = [datetime.now().day, datetime.now().hour, datetime.now().minute, datetime.now().second]
+        day = 365 - datetime.now().timetuple().tm_yday
+        hour = 23 - datetime.now().hour
+        minute = 59 - datetime.now().minute
+        second = 60 - datetime.now().second
+        code = value[0]
+        await message.answer(f"До нового года осталось🎄:\n{day} дней {hour} часов  {minute} минут {second} секунд!\n\nСсылка для вашей Тайной Санты🎅: https://t.me/ThisIsAtlas_Bot?start={str(code)}")
+
+
 
 @dp.message(letter.letter)
 async def letterMessage(message: types.Message, state: FSMContext):
-    messageText = await state.get_data()
-    print(message.text)
     a = 0
     for i in letterId:
         if i[0] == message.from_user.id:
@@ -94,7 +95,6 @@ async def letterMessage(message: types.Message, state: FSMContext):
             value = list(value)
             date = json.loads(value[2])
             date.append(i[1])
-            print(date)
             db.commit()
             sql.execute(f"UPDATE users SET letter = ? WHERE id = ?", (json.dumps(date), value[0]))
             db.commit()
@@ -107,7 +107,7 @@ async def letterMessage(message: types.Message, state: FSMContext):
 
 @dp.message(Command("music"))
 async def cmd_music(message: types.Message):
-    audio = FSInputFile(music[random.randint(0,9)])
+    audio = FSInputFile(f'music/{music[random.randint(0, len(music) - 1)]}')
     await bot.send_audio(message.chat.id, audio)
 
 @dp.message(Command("snow"))
