@@ -1,0 +1,10 @@
+status: 200
+date: Sun, 15 Dec 2024 19:16:49 GMT
+content-type: application/json; charset=utf-8
+content-length: 286
+access-control-allow-origin: *
+x-ttl: 60
+x-rl: 44
+content-location: http://ip-api.com/json/
+
+{"status":"success","country":"Ukraine","countryCode":"UA","region":"61","regionName":"Ternopil Oblast","city":"Ternopil","zip":"46001","lat":49.5535,"lon":25.5947,"timezone":"Europe/Kiev","isp":"Vodafone UA","org":"Vodafone LLC","as":"AS21497 PrJSC VF UKRAINE","query":"46.133.20.148"}
