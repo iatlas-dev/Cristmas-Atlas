@@ -19,6 +19,7 @@ import requests
 import os 
 import secrets
 import csv
+from contextlib import suppress
 
 
 logging.basicConfig(level=logging.INFO)
@@ -44,22 +45,25 @@ class letter(StatesGroup):
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
-    sql.execute(f"SELECT * FROM users WHERE id = {message.from_user.id}")
+    sql.execute(f"SELECT * FROM users WHERE id = ?", (message.from_user.id,))
     if sql.fetchone() is None:
-        sql.execute("INSERT INTO users VALUES (?,?,?,?,?)", (None, secrets.token_urlsafe(6), message.from_user.id, json.dumps([]), json.dumps([True, True])))
+        sql.execute("INSERT INTO users VALUES (?,?,?,?,?)", (None, secrets.token_urlsafe(10), message.from_user.id, json.dumps([]), json.dumps([True, True])))
         db.commit()
     
     if " " in message.text:
         code = message.text.split()[1]
     
-        sql.execute(f"SELECT * FROM users WHERE id = ?", (message.from_user.id))
+        sql.execute(f"SELECT * FROM users WHERE id = ?", (message.from_user.id,))
         value = sql.fetchone()
         value = list(value)
-        date = json.loads(value[2])
+        date = json.loads(value[3])
         sql.execute(f"SELECT * FROM users WHERE idSanta = ?", (code[0]))
         value = sql.fetchone()
         value = list(value)
-        if value[0] in date:
+        if value == None and value[1] != code[1:]:
+            await message.answer("Ооу🤨 Кажеться такого пользователя не существует или ссылка не действительна")
+            return
+        if value[2] in date:
             await message.answer("Ооу🤨 Кажеться ты уже отправлял пожелания этому пользователю😶")
             return
         await message.answer(f"Напиши мне свое пожелание которые ты хотел бы пожелать и я секретно передам человеку от которого ты получил ссылку😉")
@@ -68,7 +72,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
             if i[0] == message.from_user.id:
                 letterId.pop(a)
             a += 1
-        letterId.append([message.from_user.id, value[0]])
+        letterId.append([message.from_user.id, value[2]])
         await state.set_state(letter.letter.state)
 
     else: 
@@ -91,15 +95,19 @@ async def letterMessage(message: types.Message, state: FSMContext):
     a = 0
     for i in letterId:
         if i[0] == message.from_user.id:
-            sql.execute(f"SELECT * FROM users WHERE id = ?", (message.from_user.id))
+            sql.execute(f"SELECT * FROM users WHERE id = ?", (message.from_user.id,))
             value = sql.fetchone()
             value = list(value)
-            date = json.loads(value[2])
+            date = json.loads(value[3])
             date.append(i[1])
             db.commit()
-            sql.execute(f"UPDATE users SET letter = ? WHERE id = ?", (json.dumps(date), value[0]))
+            sql.execute(f"UPDATE users SET idLetters = ? WHERE id = ?", (json.dumps(date), value[2]))
             db.commit()
-            await bot.send_message(i[1], f"Хохохо🎅 Это новое пожелание от Тайного Санты!\n{message.text}")
+            if message.photo:
+                photo = message.photo[-1].file_id
+                await bot.send_photo(i[1], photo=photo, caption=f"Хохохо🎅 Это новое пожелание от Тайного Санты!")
+            else:
+                await bot.send_message(i[1], f"Хохохо🎅 Это новое пожелание от Тайного Санты!\n{message.text}")
             await message.answer("Прекрасно! уже отправил поздравление!📧")
             await state.clear()
             return
@@ -108,16 +116,16 @@ async def letterMessage(message: types.Message, state: FSMContext):
 
 @dp.message(Command("music"))
 async def cmd_music(message: types.Message):
-    sql.execute(f"SELECT * FROM users WHERE id = {message.from_user.id}")
+    sql.execute(f"SELECT * FROM users WHERE id = ?", (message.from_user.id,))
     if sql.fetchone() is None:
-        sql.execute("INSERT INTO users VALUES (?,?,?,?,?)", (None, secrets.token_urlsafe(6), message.from_user.id, json.dumps([]), json.dumps([True, True])))
+        sql.execute("INSERT INTO users VALUES (?,?,?,?,?)", (None, secrets.token_urlsafe(10), message.from_user.id, json.dumps([]), json.dumps([True, True])))
         db.commit()
     audio = FSInputFile(f'music/{music[random.randint(0, len(music) - 1)]}')
     await bot.send_audio(message.chat.id, audio)
 
 @dp.message(Command("snow"))
 async def cmd_snow(message: types.Message):
-    sql.execute(f"SELECT * FROM users WHERE id = {message.from_user.id}")
+    sql.execute(f"SELECT * FROM users WHERE id = ?", (message.from_user.id,))
     if sql.fetchone() is None:
         sql.execute("INSERT INTO users VALUES (?,?,?,?,?)", (None, secrets.token_urlsafe(6), message.from_user.id, json.dumps([]), json.dumps([True, True])))
         db.commit()
@@ -143,7 +151,7 @@ async def cmd_snow(message: types.Message):
 
 @dp.message(Command("mandarin"))
 async def cmd_mandrin(message: types.Message):
-    sql.execute(f"SELECT * FROM users WHERE id = {message.from_user.id}")
+    sql.execute(f"SELECT * FROM users WHERE id = ?", (message.from_user.id,))
     if sql.fetchone() is None:
         sql.execute("INSERT INTO users VALUES (?,?,?,?,?)", (None, secrets.token_urlsafe(6), message.from_user.id, json.dumps([]), json.dumps([True, True])))
         db.commit()
@@ -155,9 +163,9 @@ async def cmd_mandrin(message: types.Message):
 
 @dp.message(Command("settings"))
 async def cmd_settings(message: types.Message):
-    sql.execute(f"SELECT * FROM users WHERE id = {message.from_user.id}")
+    sql.execute(f"SELECT * FROM users WHERE id = ?", (message.from_user.id,))
     if sql.fetchone() is None:
-        sql.execute("INSERT INTO users VALUES (?,?,?,?,?)", (None, secrets.token_urlsafe(6), message.from_user.id, json.dumps([]), json.dumps([True, True])))
+        sql.execute("INSERT INTO users VALUES (?,?,?,?,?)", (None, secrets.token_urlsafe(10), message.from_user.id, json.dumps([]), json.dumps([True, True])))
         db.commit()
     builder = InlineKeyboardBuilder()
     sql.execute(f"SELECT * FROM users WHERE id = ?", (message.from_user.id,))
@@ -165,15 +173,41 @@ async def cmd_settings(message: types.Message):
     value = list(value)
     settings = json.loads(value[4])
     builder.add(types.InlineKeyboardButton(
-        text=f"{'Выключить' if settings[0] == True else 'Включить'} уведомления об отчете до НГ",
-        callback_data = "notifactions"
+        text=f"{'💔Выключить' if settings[0] == True else '❤Включить'} уведомления об отчете до НГ",
+        callback_data = "notifications"
     ))
     builder.add(types.InlineKeyboardButton(
-        text=f"{'Не приимать' if settings[1] == True else 'Принимать'} сообщения от Тайного Санты",
+        text=f"{'💔Не приимать' if settings[1] == True else '❤Принимать'} сообщения от Тайного Санты",
         callback_data = "santa"
     ))
+    builder.adjust(1)
     await message.answer("🎄Настройки Нового Года:", reply_markup=builder.as_markup())
 
+@dp.callback_query(F.data == 'notifications')
+async def call_notifications(call: types.CallbackQuery):
+    sql.execute(f"SELECT * FROM users WHERE id = ?", (call.message.from_user.id,))
+    if sql.fetchone() is None:
+        sql.execute("INSERT INTO users VALUES (?,?,?,?,?)", (None, secrets.token_urlsafe(10), call.message.from_user.id, json.dumps([]), json.dumps([True, True])))
+        db.commit()
+    builder = InlineKeyboardBuilder()
+    sql.execute(f"SELECT * FROM users WHERE id = ?", (call.message.from_user.id,))
+    value = sql.fetchone()
+    value = list(value)
+    settings = json.loads(value[4])
+    settings[0] = not settings[0]
+    sql.execute("UPDATE users SET settings = ? WHERE id = ?", (json.dumps(settings), value[0]))
+    db.commit()
+    builder.add(types.InlineKeyboardButton(
+        text=f"{'💔Выключить' if settings[0] == True else '❤Включить'} уведомления об отчете до НГ",
+        callback_data = "notifications"
+    ))
+    builder.add(types.InlineKeyboardButton(
+        text=f"{'💔Не приимать' if settings[1] == True else '❤Принимать'} сообщения от Тайного Санты",
+        callback_data = "santa"
+    ))
+    builder.adjust(1)
+    with suppress(TelegramBadRequest):
+        await call.message.edit_text("🎄Настройки Нового Года:", reply_markup=builder.as_markup())
 
 async def send_message_day():
     time.sleep(0.22)
