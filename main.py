@@ -48,11 +48,11 @@ class letter(StatesGroup):
 def get_user(message):
     sql.execute(f"SELECT * FROM users WHERE id = ?", (message.from_user.id,))
     if sql.fetchone() is None:
-        sql.execute("INSERT INTO users VALUES (?,?,?,?,?,?)", (None, secrets.token_urlsafe(10),message.from_user.id, json.dumps([]), json.dumps([True, True]), json.dumps([0, 0])))
+        sql.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?)", (None, secrets.token_urlsafe(10), message.from_user.id, message.from_user.full_name, json.dumps([]), json.dumps([True, True]), json.dumps([0, 0])))
         db.commit()
     sql.execute(f"SELECT * FROM users WHERE id = ?", (message.from_user.id,))
     value = sql.fetchone()
-    print(message.chat.type)
+    value = list(value)
     if message.chat.type == "group" or "supergroup":
         sql.execute(f"SELECT * FROM chats WHERE chat_id = ?", (message.chat.id,))
         if sql.fetchone() is None:
@@ -65,9 +65,11 @@ def get_user(message):
         members = json.loads(value_chat[1])
         if message.from_user.id not in members:
             members.append(message.from_user.id)
-            sql.execute('UPDATE chats SET members = ? WHERE chat_id = ?', (message.chat.id, json.dumps(members)))
+            sql.execute('UPDATE chats SET members = ? WHERE chat_id = ?', (json.dumps(members), message.chat.id))
             db.commit()
-    return list(value)
+    if value[3] != message.from_user.full_name:
+        sql.execute('UPDATE users SET name = ? WHERE id = ?', (message.from_user.full_name, message.from_user.id))
+    return value
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
@@ -75,7 +77,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
     if " " in message.text:
         code = message.text.split()[1]
-        date = json.loads(value[3])
+        date = json.loads(value[4])
         sql.execute(f"SELECT * FROM users WHERE idSanta = ?", (code[0]))
         value = sql.fetchone()
         value = list(value)
@@ -85,7 +87,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
         if value[2] in date:
             await message.answer("Ооу🤨 Кажеться ты уже отправлял пожелания этому пользователю😶")
             return
-        if json.loads(value[4])[1] == False:
+        if json.loads(value[5])[1] == False:
             await message.answer("Ооу🤨 Кажеться этот пользователь закрыл эту ссылку...")
         await message.answer(f"Напиши мне свое пожелание которые ты хотел бы пожелать и я секретно передам человеку от которого ты получил ссылку😉")
         a = 0
@@ -123,7 +125,7 @@ async def letterMessage(message: types.Message, state: FSMContext):
             if message.photo:
                 photo = message.photo[-1].file_id
                 await bot.send_photo(i[1], photo=photo, caption=f"Хохохо🎅 Это новое пожелание от Тайного Санты!")
-            else:
+            if message.text:
                 await bot.send_message(i[1], f"Хохохо🎅 Это новое пожелание от Тайного Санты!\n{message.text}")
             await message.answer("Прекрасно! уже отправил поздравление!📧")
             await state.clear()
@@ -162,19 +164,19 @@ async def cmd_snow(message: types.Message):
 @dp.message(Command("mandarin"))
 async def cmd_mandrin(message: types.Message):
     value = get_user(message)
-    mandarins = json.loads(value[5])
-    if random.randint(0, 100) <= 30:
-        karma = random.randint(0, 10) if mandarins[1] == 0 else random.randint(0, int((mandarins[1] / 100) * 50).round()) 
+    mandarins = json.loads(value[6])
+    if random.randint(0, 100) <= 90:
+        karma = random.randint(0, 10) if mandarins[1] == 0 else random.randint(0, round((mandarins[1] / 100) * 50))
     else:
-        karma = -random.randint(0, 10) if mandarins[1] == 0 else -random.randint(1, int((mandarins[1] / 100) * 10).round()) 
+        karma = -random.randint(0, 10) if mandarins[1] == 0 else random.randint(0, round((mandarins[1] / 100) * 10))
     mandarins[1] += karma
     sql.execute('UPDATE users SET mandarin = ? WHERE id = ?', (json.dumps(mandarins), message.from_user.id))
-    bd.commit()
+    db.commit()
     with open('mandarin.csv', 'r', encoding='utf-8') as file:
         reader = csv.reader(file)
         mandarin = list(reader)
         wish = mandarin[random.randint(1, len(mandarin)-1)]
-        await message.answer(f'{message.from_user.full_name} сегодня {f'собрал {karma} мандраринок и теперь их у тебя целых {mandarins[1]}! Они отлично дополнят новогодний стол!' if karma > 0 else f'не твой день... {karma} теперь у тебя всего лишь {mandarins[1]} В следующий раз у тебя точно получиться!'} \n\n\n {f'Судьба говорит что: {wish[0]}\n\nРедкость: {json.loads(mandarin[0][0])[int(wish[1])]}' if random.randint(0,1) == 1 else 'Судьба ничего не сказала...'}')
+        await message.answer(f'{message.from_user.full_name} сегодня {f'собрал {karma} мандраринок и теперь их у тебя целых {mandarins[1]}! Они отлично дополнят новогодний стол!' if karma > 0 else f'не твой день... {karma} теперь у тебя всего лишь {mandarins[1]} мандаринок. В следующий раз у тебя точно получиться!'} \n\n\n {f'Судьба говорит что: {wish[0]}\n\nРедкость: {json.loads(mandarin[0][0])[str(wish[1])]}' if random.randint(0,1) == 1 else 'Судьба ничего не сказала...'}')
 
 @dp.message(Command("topchat"))
 async def cmd_topchat(message: types.Message):
@@ -183,14 +185,41 @@ async def cmd_topchat(message: types.Message):
         value = sql.fetchone()
         if value != None:
             members = json.loads(value[1])
-            message.answer(members)
+            liders = []
+            for user in members:
+                sql.execute('SELECT * FROM users WHERE id = ?', (user,))
+                user = sql.fetchone()
+                user = list(user)
+                if user != None:
+                    liders.append([user[0], user[3], json.loads(user[6])[1]])
+            
+            liders.sort(key=lambda x: x[2], reverse=True)
+            lidersText = ''
+            for u in range(7 if len(liders) >= 7 else len(liders)):
+                lidersText += f'{u+1}. {liders[u][1]} ({liders[u][2]} мандаринок)\n'
+            await message.answer(f'Лучшие мастера в мандаринах этого чата:\n\n{lidersText}')
+
+
+@dp.message(Command("top"))
+async def cmd_topchat(message: types.Message):
+    liders = []
+    for value in sql.execute("SELECT * FROM users"):
+        value = list(value)
+        liders.append([value[0], value[3], json.loads(value[6])[1]])
+            
+    liders.sort(key=lambda x: x[2], reverse=True)
+    lidersText = ''
+    for u in range(7 if len(liders) >= 7 else len(liders)):
+        lidersText += f'{u+1}. {liders[u][1]} ({liders[u][2]} мандаринок)\n'
+    await message.answer(f'Лучшие мастера в мандаринах:\n\n{lidersText}')
+
 
 
 @dp.message(Command("settings"))
 async def cmd_settings(message: types.Message):
     value = get_user(message)
     builder = InlineKeyboardBuilder()
-    settings = json.loads(value[4])
+    settings = json.loads(value[5])
     builder.add(types.InlineKeyboardButton(
         text=f"{'💔Выключить' if settings[0] == True else '❤Включить'} уведомления об отчете до НГ",
         callback_data = "settings_notifications"
@@ -209,7 +238,7 @@ async def cmd_settings(message: types.Message):
 @dp.callback_query(F.data.startswith('settings_'))
 async def call_notifications(call: types.CallbackQuery):
     value = get_user(call.message)
-    settings = json.loads(value[4])
+    settings = json.loads(value[5])
     result = ''
     action = call.data.split('_')[1]
     if action == 'retext':
@@ -250,7 +279,7 @@ async def send_message_day():
         text = "С НОВЫМ ГОДОМ!🎆\nКанал автора бота: https:/t.me/AtlasForAmerica"
 
     for value in sql.execute("SELECT * FROM users"):
-        if json.loads(value[3])[0] == True:
+        if json.loads(list(value)[5])[0] == True:
             await bot.send_message(chat_id=value[0], text=text)
 
 
