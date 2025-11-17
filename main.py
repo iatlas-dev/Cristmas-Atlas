@@ -45,18 +45,33 @@ for music in musicFolder:
 class letter(StatesGroup):
     letter = State()
 
-def get_user(id):
-    sql.execute(f"SELECT * FROM users WHERE id = ?", (id,))
+def get_user(message):
+    sql.execute(f"SELECT * FROM users WHERE id = ?", (message.from_user.id,))
     if sql.fetchone() is None:
-        sql.execute("INSERT INTO users VALUES (?,?,?,?,?)", (None, secrets.token_urlsafe(10), id, json.dumps([]), json.dumps([True, True])))
+        sql.execute("INSERT INTO users VALUES (?,?,?,?,?,?)", (None, secrets.token_urlsafe(10),message.from_user.id, json.dumps([]), json.dumps([True, True]), json.dumps([0, 0])))
         db.commit()
-    sql.execute(f"SELECT * FROM users WHERE id = ?", (id,))
+    sql.execute(f"SELECT * FROM users WHERE id = ?", (message.from_user.id,))
     value = sql.fetchone()
+    print(message.chat.type)
+    if message.chat.type == "group" or "supergroup":
+        sql.execute(f"SELECT * FROM chats WHERE chat_id = ?", (message.chat.id,))
+        if sql.fetchone() is None:
+            sql.execute("INSERT INTO chats VALUES (?,?)", (message.chat.id, json.dumps([message.from_user.id])))
+            db.commit()
+            value_chat = sql.fetchone()
+            return list(value)
+        sql.execute(f"SELECT * FROM chats WHERE chat_id = ?", (message.chat.id,))
+        value_chat = sql.fetchone()
+        members = json.loads(value_chat[1])
+        if message.from_user.id not in members:
+            members.append(message.from_user.id)
+            sql.execute('UPDATE chats SET members = ? WHERE chat_id = ?', (message.chat.id, json.dumps(members)))
+            db.commit()
     return list(value)
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
-    value = get_user(message.from_user.id)
+    value = get_user(message)
 
     if " " in message.text:
         code = message.text.split()[1]
@@ -118,13 +133,13 @@ async def letterMessage(message: types.Message, state: FSMContext):
 
 @dp.message(Command("music"))
 async def cmd_music(message: types.Message):
-    value = get_user(message.from_user.id)
+    value = get_user(message)
     audio = musics[random.randint(0, len(musics)-1)]
     await bot.send_audio(message.chat.id, audio)
 
 @dp.message(Command("snow"))
 async def cmd_snow(message: types.Message):
-    value = get_user(message.from_user.id)
+    value = get_user(message)
     time.sleep(0.2)
     city = message.text.split()[1]
     res = requests.get('http://api.openweathermap.org/data/2.5/forecast', params={'q': f'{city}', 'type': 'like', 'units': 'metric', 'APPID': '2b845cde2521735273dfaba14ada0b8f'})
@@ -146,16 +161,34 @@ async def cmd_snow(message: types.Message):
 
 @dp.message(Command("mandarin"))
 async def cmd_mandrin(message: types.Message):
-    value = get_user(message.from_user.id)
+    value = get_user(message)
+    mandarins = json.loads(value[5])
+    if random.randint(0, 100) <= 30:
+        karma = random.randint(0, 10) if mandarins[1] == 0 else random.randint(0, int((mandarins[1] / 100) * 50).round()) 
+    else:
+        karma = -random.randint(0, 10) if mandarins[1] == 0 else -random.randint(1, int((mandarins[1] / 100) * 10).round()) 
+    mandarins[1] += karma
+    sql.execute('UPDATE users SET mandarin = ? WHERE id = ?', (json.dumps(mandarins), message.from_user.id))
+    bd.commit()
     with open('mandarin.csv', 'r', encoding='utf-8') as file:
         reader = csv.reader(file)
         mandarin = list(reader)
         wish = mandarin[random.randint(1, len(mandarin)-1)]
-        await message.answer(f'Судьба говорит что: {wish[0]}\n\nРедкость: {mandarin[0][int(wish[1])]}')
+        await message.answer(f'{message.from_user.full_name} сегодня {f'собрал {karma} мандраринок и теперь их у тебя целых {mandarins[1]}! Они отлично дополнят новогодний стол!' if karma > 0 else f'не твой день... {karma} теперь у тебя всего лишь {mandarins[1]} В следующий раз у тебя точно получиться!'} \n\n\n {f'Судьба говорит что: {wish[0]}\n\nРедкость: {json.loads(mandarin[0][0])[int(wish[1])]}' if random.randint(0,1) == 1 else 'Судьба ничего не сказала...'}')
+
+@dp.message(Command("topchat"))
+async def cmd_topchat(message: types.Message):
+    if message.chat.type == "group" or "supergroup":
+        sql.execute(f"SELECT * FROM chats WHERE chat_id = ?", (message.chat.id,))
+        value = sql.fetchone()
+        if value != None:
+            members = json.loads(value[1])
+            message.answer(members)
+
 
 @dp.message(Command("settings"))
 async def cmd_settings(message: types.Message):
-    value = get_user(message.from_user.id)
+    value = get_user(message)
     builder = InlineKeyboardBuilder()
     settings = json.loads(value[4])
     builder.add(types.InlineKeyboardButton(
@@ -175,7 +208,7 @@ async def cmd_settings(message: types.Message):
 
 @dp.callback_query(F.data.startswith('settings_'))
 async def call_notifications(call: types.CallbackQuery):
-    value = get_user(call.message.from_user.id)
+    value = get_user(call.message)
     settings = json.loads(value[4])
     result = ''
     action = call.data.split('_')[1]
