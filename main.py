@@ -164,12 +164,18 @@ async def cmd_snow(message: types.Message):
 @dp.message(Command("mandarin"))
 async def cmd_mandrin(message: types.Message):
     value = get_user(message)
+    datet = datetime.now()
+    date = int(datet.strftime('%Y%m%d%H%M'))
     mandarins = json.loads(value[6])
+    if date - mandarins[0] < 200:
+        await message.answer(f'Тише тише... Отдохни от мандаринов\n\nПриходи через {str(date - mandarins[0])[0]} часов и {str(date - mandarins[0])[0:]} минут')
+        return
     if random.randint(0, 100) <= 90:
         karma = random.randint(0, 10) if mandarins[1] == 0 else random.randint(0, round((mandarins[1] / 100) * 50))
     else:
         karma = -random.randint(0, 10) if mandarins[1] == 0 else random.randint(0, round((mandarins[1] / 100) * 10))
     mandarins[1] += karma
+    mandarins[0] = date
     sql.execute('UPDATE users SET mandarin = ? WHERE id = ?', (json.dumps(mandarins), message.from_user.id))
     db.commit()
     with open('mandarin.csv', 'r', encoding='utf-8') as file:

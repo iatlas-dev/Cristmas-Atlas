@@ -12,10 +12,6 @@ wish = [[json.dumps({0: 'Ну почти редко', 1: 'редко', 2: ' ни
 
 
 
-with open('mandarin.csv', 'r', encoding='utf-8') as file:
-    reader = csv.reader(file)
-    mandarin = list(reader)
-    print(json.loads(mandarin[0][0])['0'])
-
-
-
+datet = datetime.now()
+date = int(datet.strftime('%Y%m%d%H%M'))
+print(date)
