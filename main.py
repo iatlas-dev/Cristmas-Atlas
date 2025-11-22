@@ -42,13 +42,14 @@ for music in musicFolder:
     musics.append(FSInputFile(f'music/{music}'))
 
 
-class letter(StatesGroup):
+class states(StatesGroup):
     letter = State()
+    retime = State()
 
 def get_user(message):
     sql.execute(f"SELECT * FROM users WHERE id = ?", (message.from_user.id,))
     if sql.fetchone() is None:
-        sql.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?)", (None, secrets.token_urlsafe(10), message.from_user.id, message.from_user.full_name, json.dumps([]), json.dumps([True, True]), json.dumps([0, 0])))
+        sql.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?)", (None, secrets.token_urlsafe(10), message.from_user.id, message.from_user.full_name, json.dumps([]), json.dumps([True, True, 'Europe/Kyiv']), json.dumps([0, 0])))
         db.commit()
     sql.execute(f"SELECT * FROM users WHERE id = ?", (message.from_user.id,))
     value = sql.fetchone()
@@ -96,10 +97,12 @@ async def cmd_start(message: types.Message, state: FSMContext):
                 letterId.pop(a)
             a += 1
         letterId.append([message.from_user.id, value[2]])
-        await state.set_state(letter.letter.state)
+        await state.set_state(states.letter.state)
 
     else: 
         builder = InlineKeyboardBuilder()
+        now_utc = datetime.now(pytz.utc)
+        time = now_utc.astimezone(desired_timezone)
         day = 365 - datetime.now().timetuple().tm_yday
         hour = 23 - datetime.now().hour
         minute = 59 - datetime.now().minute
@@ -109,7 +112,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
 
 
-@dp.message(letter.letter)
+@dp.message(states.letter)
 async def letterMessage(message: types.Message, state: FSMContext):
     a = 0
     for i in letterId:
@@ -168,7 +171,7 @@ async def cmd_mandrin(message: types.Message):
     date = int(datet.strftime('%Y%m%d%H%M'))
     mandarins = json.loads(value[6])
     if date - mandarins[0] < 200:
-        await message.answer(f'Тише тише... Отдохни от мандаринов\n\nПриходи через {str(date - mandarins[0])[0]} часов и {str(date - mandarins[0])[0:]} минут')
+        await message.answer(f'Тише тише... Отдохни от мандаринов\n\nПриходи через {str(date - mandarins[0])[0] - 200} часов и {str(date - mandarins[0])[0:] - 200} минут')
         return
     if random.randint(0, 100) <= 90:
         karma = random.randint(0, 10) if mandarins[1] == 0 else random.randint(0, round((mandarins[1] / 100) * 50))
@@ -182,7 +185,7 @@ async def cmd_mandrin(message: types.Message):
         reader = csv.reader(file)
         mandarin = list(reader)
         wish = mandarin[random.randint(1, len(mandarin)-1)]
-        await message.answer(f'{message.from_user.full_name} сегодня {f'собрал {karma} мандраринок и теперь их у тебя целых {mandarins[1]}! Они отлично дополнят новогодний стол!' if karma > 0 else f'не твой день... {karma} теперь у тебя всего лишь {mandarins[1]} мандаринок. В следующий раз у тебя точно получиться!'} \n\n\n {f'Судьба говорит что: {wish[0]}\n\nРедкость: {json.loads(mandarin[0][0])[str(wish[1])]}' if random.randint(0,1) == 1 else 'Судьба ничего не сказала...'}')
+        await message.answer(f"{message.from_user.full_name} сегодня {f'собрал {karma} мандраринок и теперь их у тебя целых {mandarins[1]}! Они отлично дополнят новогодний стол!' if karma > 0 else f'не твой день... {karma} теперь у тебя всего лишь {mandarins[1]} мандаринок. В следующий раз у тебя точно получиться!'} \n\n\n {f'Судьба говорит что: {wish[0]}\n\nРедкость: {json.loads(mandarin[0][0])[str(wish[1])]}' if random.randint(0,1) == 1 else 'Судьба ничего не сказала...'}")
 
 @dp.message(Command("topchat"))
 async def cmd_topchat(message: types.Message):
@@ -238,11 +241,15 @@ async def cmd_settings(message: types.Message):
         text=f"Изменить ссылку на Тайного Санту",
         callback_data = "settings_retext"
     ))
+    builder.add(types.InlineKeyboardButton(
+        text=f"Изменить часовой пояс",
+        callback_data = "settings_retime"
+    ))
     builder.adjust(1)
     await message.answer("🎄Настройки Нового Года:", reply_markup=builder.as_markup())
 
 @dp.callback_query(F.data.startswith('settings_'))
-async def call_notifications(call: types.CallbackQuery):
+async def call_notifications(call: types.CallbackQuery, state: FSMContent):
     value = get_user(call.message)
     settings = json.loads(value[5])
     result = ''
@@ -252,6 +259,9 @@ async def call_notifications(call: types.CallbackQuery):
         sql.execute("UPDATE users SET tokenSanta = ? WHERE id = ?", (token, call.message.from_user.id))
         db.commit()
         result = f'❄Ссылка успешно изменнна на https://t.me/ThisIsAtlas_Bot?start={str(value[0])+token}'
+    if action == 'retime':
+        await message.answer("Отправь мне свой часовой пояс в формате: \n\n")
+        await state.set_state(state.retime.state)
     else:
         actions = {'notifications': 0, 'santa': 1}
         settings[actions[action]] = not settings[actions[action]]
@@ -271,10 +281,16 @@ async def call_notifications(call: types.CallbackQuery):
         text=f"Изменить ссылку на Тайного Санту",
         callback_data = "settings_retext"
     ))
+    builder.add(types.InlineKeyboardButton(
+        text=f"Изменить часовой пояс",
+        callback_data = "settings_retime"
+    ))
     builder.adjust(1)
     with suppress(TelegramBadRequest):
         await call.message.edit_text(f"🎄Настройки Нового Года:/\n\n{result}", reply_markup=builder.as_markup())
 
+@dp.message(state.retime)
+async def cmd_retime(message: types.Message, state: FSMContent):
 
 
 async def send_message_day():

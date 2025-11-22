@@ -4,14 +4,18 @@ from datetime import datetime
 import csv
 import random
 import json
-db = sqlite3.connect('user.db', check_same_thread = False)
-sql = db.cursor() 
-db.commit() 
-wish = [[json.dumps({0: 'Ну почти редко', 1: 'редко', 2: ' ничосе', 3: 'ФИГАСЕ', 4: '(⊙_⊙)', 5: 'СУПЕР|ПУПЕР|ОМЕГА|ГИПЕР|УЛЬТРА|ПРО|МАКС|НЕ|АЙФОН'}), 0], ['000', 0]]
+
+from datetime import datetime
+import pytz
+
+try:
+    desired_timezone = pytz.timezone('America/New_Yok')
+except:
+    print('error timezone')
+    
 
 
+now_utc = datetime.now(pytz.utc)
+now_in_desired_timezone = now_utc.astimezone(desired_timezone)
 
-
-datet = datetime.now()
-date = int(datet.strftime('%Y%m%d%H%M'))
-print(date)
+print(f"Current time in New York: {now_in_desired_timezone}")
