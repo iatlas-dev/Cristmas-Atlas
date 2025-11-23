@@ -72,10 +72,33 @@ def get_user(message):
         sql.execute('UPDATE users SET name = ? WHERE id = ?', (message.from_user.full_name, message.from_user.id))
     return value
 
+
+def settings_button(value):
+    settings = json.loads(value[5])
+    builder = InlineKeyboardBuilder()
+    builder.add(types.InlineKeyboardButton(
+        text=f"{'💔Выключить' if settings[0] == True else '❤Включить'} уведомления об отчете до НГ",
+        callback_data = "settings_notifications"
+    ))
+    builder.add(types.InlineKeyboardButton(
+        text=f"{'💔Не приимать' if settings[1] == True else '❤Принимать'} сообщения от Тайного Санты",
+        callback_data = "settings_santa"
+    ))
+    builder.add(types.InlineKeyboardButton(
+        text=f"Изменить ссылку на Тайного Санту",
+        callback_data = "settings_retext"
+    ))
+    builder.add(types.InlineKeyboardButton(
+        text=f"Изменить часовой пояс",
+        callback_data = "settings_retime"
+    ))
+    builder.adjust(1)
+    return builder.as_markup()
+
+
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message, state: FSMContext):
     value = get_user(message)
-
     if " " in message.text:
         code = message.text.split()[1]
         date = json.loads(value[4])
@@ -90,7 +113,13 @@ async def cmd_start(message: types.Message, state: FSMContext):
             return
         if json.loads(value[5])[1] == False:
             await message.answer("Ооу🤨 Кажеться этот пользователь закрыл эту ссылку...")
-        await message.answer(f"Напиши мне свое пожелание которые ты хотел бы пожелать и я секретно передам человеку от которого ты получил ссылку😉")
+            return
+        builder = InlineKeyboardBuilder()
+        builder.add(types.InlineKeyboardButton(
+            text="Отмена",
+            callback_data = "close_letter"
+        ))
+        await message.answer(f"Напиши мне свое пожелание которые ты хотел бы пожелать и я секретно передам человеку от которого ты получил ссылку😉", reply_markup=builder.as_markup())
         a = 0
         for i in letterId:
             if i[0] == message.from_user.id:
@@ -101,12 +130,13 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
     else: 
         builder = InlineKeyboardBuilder()
+        desired_timezone = pytz.timezone(json.loads(value[5])[2])
         now_utc = datetime.now(pytz.utc)
-        time = now_utc.astimezone(desired_timezone)
-        day = 365 - datetime.now().timetuple().tm_yday
-        hour = 23 - datetime.now().hour
-        minute = 59 - datetime.now().minute
-        second = 60 - datetime.now().second
+        dateCristmas = now_utc.astimezone(desired_timezone)
+        day = 365 - dateCristmas.timetuple().tm_yday
+        hour = 23 - dateCristmas.hour
+        minute = 59 - dateCristmas.minute
+        second = 60 - dateCristmas.second
         code = str(value[0]) + value[1]
         await message.answer(f"До нового года осталось🎄:\n{day} дней {hour} часов  {minute} минут {second} секунд!\n\nСсылка для вашей Тайной Санты🎅: https://t.me/ThisIsAtlas_Bot?start={str(code)}")
 
@@ -170,8 +200,9 @@ async def cmd_mandrin(message: types.Message):
     datet = datetime.now()
     date = int(datet.strftime('%Y%m%d%H%M'))
     mandarins = json.loads(value[6])
-    if date - mandarins[0] < 200:
-        await message.answer(f'Тише тише... Отдохни от мандаринов\n\nПриходи через {str(date - mandarins[0])[0] - 200} часов и {str(date - mandarins[0])[0:] - 200} минут')
+    if date - mandarins[0] < 160:
+        time_free = date - mandarins[0] - 160
+        await message.answer(f'Тише тише... Отдохни от мандаринов\n\nПриходи через {str(time_free / 2)[1]} часов и {time_free - int(str((time_free / 2)[1]))} минут')
         return
     if random.randint(0, 100) <= 90:
         karma = random.randint(0, 10) if mandarins[1] == 0 else random.randint(0, round((mandarins[1] / 100) * 50))
@@ -227,29 +258,12 @@ async def cmd_topchat(message: types.Message):
 @dp.message(Command("settings"))
 async def cmd_settings(message: types.Message):
     value = get_user(message)
-    builder = InlineKeyboardBuilder()
+    builder = settings_button(value)
     settings = json.loads(value[5])
-    builder.add(types.InlineKeyboardButton(
-        text=f"{'💔Выключить' if settings[0] == True else '❤Включить'} уведомления об отчете до НГ",
-        callback_data = "settings_notifications"
-    ))
-    builder.add(types.InlineKeyboardButton(
-        text=f"{'💔Не приимать' if settings[1] == True else '❤Принимать'} сообщения от Тайного Санты",
-        callback_data = "settings_santa"
-    ))
-    builder.add(types.InlineKeyboardButton(
-        text=f"Изменить ссылку на Тайного Санту",
-        callback_data = "settings_retext"
-    ))
-    builder.add(types.InlineKeyboardButton(
-        text=f"Изменить часовой пояс",
-        callback_data = "settings_retime"
-    ))
-    builder.adjust(1)
-    await message.answer("🎄Настройки Нового Года:", reply_markup=builder.as_markup())
+    await message.answer("🎄Настройки Нового Года:", reply_markup=builder)
 
 @dp.callback_query(F.data.startswith('settings_'))
-async def call_notifications(call: types.CallbackQuery, state: FSMContent):
+async def call_notifications(call: types.CallbackQuery, state: FSMContext):
     value = get_user(call.message)
     settings = json.loads(value[5])
     result = ''
@@ -259,39 +273,52 @@ async def call_notifications(call: types.CallbackQuery, state: FSMContent):
         sql.execute("UPDATE users SET tokenSanta = ? WHERE id = ?", (token, call.message.from_user.id))
         db.commit()
         result = f'❄Ссылка успешно изменнна на https://t.me/ThisIsAtlas_Bot?start={str(value[0])+token}'
-    if action == 'retime':
-        await message.answer("Отправь мне свой часовой пояс в формате: \n\n")
-        await state.set_state(state.retime.state)
+    elif action == 'retime':
+        await call.message.delete()
+        builder = InlineKeyboardBuilder()
+        builder.add(types.InlineKeyboardButton(
+            text="Отмена",
+            callback_data = "close_retime"
+        ))
+        await call.message.answer(f"Отправь мне свой часовой пояс в формате Part_of_the_world/City \nПримеры:\nAmirica/New_York\nEurope/Kyiv\nEurope/Moscow")
+        await state.set_state(states.retime.state)
+        return
     else:
-        actions = {'notifications': 0, 'santa': 1}
-        settings[actions[action]] = not settings[actions[action]]
+        settings[{'notifications': 0, 'santa': 1}[action]] = not settings[{'notifications': 0, 'santa': 1}[action]]
         sql.execute("UPDATE users SET Settings = ? WHERE id = ?", (json.dumps(settings), call.message.from_user.id))
         db.commit()
         result = f'❄Настройки успешно сохраненны'
-    builder = InlineKeyboardBuilder()
-    builder.add(types.InlineKeyboardButton(
-        text=f"{'💔Выключить' if settings[0] == True else '❤Включить'} уведомления об отчете до НГ",
-        callback_data = "settings_notifications"
-    ))
-    builder.add(types.InlineKeyboardButton(
-        text=f"{'💔Не приимать' if settings[1] == True else '❤Принимать'} сообщения от Тайного Санты",
-        callback_data = "settings_santa"
-    ))
-    builder.add(types.InlineKeyboardButton(
-        text=f"Изменить ссылку на Тайного Санту",
-        callback_data = "settings_retext"
-    ))
-    builder.add(types.InlineKeyboardButton(
-        text=f"Изменить часовой пояс",
-        callback_data = "settings_retime"
-    ))
-    builder.adjust(1)
+    builder = settings_button(value)
     with suppress(TelegramBadRequest):
-        await call.message.edit_text(f"🎄Настройки Нового Года:/\n\n{result}", reply_markup=builder.as_markup())
+        await call.message.edit_text(f"🎄Настройки Нового Года:/\n\n{result}", reply_markup=builder)
 
-@dp.message(state.retime)
-async def cmd_retime(message: types.Message, state: FSMContent):
-
+@dp.message(states.retime)
+async def cmd_retime(message: types.Message, state: FSMContext):
+    result = ''
+    try:
+        desired_timezone = pytz.timezone(message.text)
+        value = get_user(message)
+        settings = json.loads(value[5])
+        settings[2] = message.text
+        sql.execute("UPDATE users SET Settings = ? WHERE id = ?", (json.dumps(settings), message.from_user.id))
+        db.commit()
+        result = f"Часовой пояс успешно изменен на {message.text}"
+    except:
+        result = "Ооу🤨 Кажеться это неверный часовой пояс или ты его не правильно ввел"
+    builder = settings_button(value)
+    await message.answer(f"🎄Настройки Нового Года:/\n\n{result}", reply_markup=builder)
+    await state.clear()
+    
+@dp.callback_query(F.data.startswith('close_'))
+async def call_notifications(call: types.CallbackQuery, state: FSMContext): 
+    value = get_user(call.message)
+    action = call.data.split('_')[1]
+    if action == 'retime':
+        builder = settings_button(value)
+        await call.message.answer(f"🎄Настройки Нового Года:/\n\nДействие отмененно", reply_markup=builder)
+    if action == 'letter':
+        await call.message.answer("Действие отмененно")
+    await state.clear()
 
 async def send_message_day():
     time.sleep(0.22)

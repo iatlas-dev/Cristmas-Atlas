@@ -9,7 +9,7 @@ from datetime import datetime
 import pytz
 
 try:
-    desired_timezone = pytz.timezone('America/New_Yok')
+    desired_timezone = pytz.timezone('America/New_York')
 except:
     print('error timezone')
     
@@ -18,4 +18,4 @@ except:
 now_utc = datetime.now(pytz.utc)
 now_in_desired_timezone = now_utc.astimezone(desired_timezone)
 
-print(f"Current time in New York: {now_in_desired_timezone}")
+print(f"{now_in_desired_timezone.timetuple().tm_yday}")
