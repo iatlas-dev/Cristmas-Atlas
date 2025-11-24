@@ -1,21 +1,19 @@
 import sqlite3 
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import csv
 import random
 import json
-
-from datetime import datetime
 import pytz
 
+delta = timedelta(hours=5)
+
 try:
-    desired_timezone = pytz.timezone('America/New_York')
+    desired_timezone = pytz.timezone('Europe/Kyiv')
 except:
     print('error timezone')
     
 
+date = datetime.now()
 
-now_utc = datetime.now(pytz.utc)
-now_in_desired_timezone = now_utc.astimezone(desired_timezone)
-
-print(f"{now_in_desired_timezone.timetuple().tm_yday}")
+print(int(date.timestamp()))

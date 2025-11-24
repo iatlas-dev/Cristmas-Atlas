@@ -8,7 +8,7 @@ from aiogram.types import FSInputFile
 from aiogram import F
 import random
 import json
-from datetime import datetime
+from datetime import datetime, timedelta, time
 import pytz
 import sqlite3 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -21,7 +21,7 @@ import secrets
 import csv
 from contextlib import suppress
 from aiogram.exceptions import TelegramBadRequest
-
+import psutil
 
 logging.basicConfig(level=logging.INFO)
 #8108818471:AAFlQ4YS8jiXS9tz11Z5qICIWrtQoUnEFcs official
@@ -33,11 +33,11 @@ dp = Dispatcher()
 db = sqlite3.connect('user.db', check_same_thread = False)
 sql = db.cursor() 
 db.commit() 
-kyiv = pytz.timezone('Europe/Kyiv')
 scheduler = AsyncIOScheduler()
 letterId = []
 musicFolder = os.listdir('music')
 musics = []
+admin_id = 990812913
 for music in musicFolder:
     musics.append(FSInputFile(f'music/{music}'))
 
@@ -102,10 +102,12 @@ async def cmd_start(message: types.Message, state: FSMContext):
     if " " in message.text:
         code = message.text.split()[1]
         date = json.loads(value[4])
-        sql.execute(f"SELECT * FROM users WHERE idSanta = ?", (code[0]))
+        token = code.split('i')[0]
+        id = code.split('i')[1]
+        sql.execute(f"SELECT * FROM users WHERE idSanta = ?", (id))
         value = sql.fetchone()
         value = list(value)
-        if value == None and value[1] != code[1:]:
+        if value == None and value[1] != token:
             await message.answer("Ооу🤨 Кажеться такого пользователя не существует или ссылка не действительна")
             return
         if value[2] in date:
@@ -137,7 +139,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
         hour = 23 - dateCristmas.hour
         minute = 59 - dateCristmas.minute
         second = 60 - dateCristmas.second
-        code = str(value[0]) + value[1]
+        code = f'{str(value[0])}i{value[1]}'
         await message.answer(f"До нового года осталось🎄:\n{day} дней {hour} часов  {minute} минут {second} секунд!\n\nСсылка для вашей Тайной Санты🎅: https://t.me/ThisIsAtlas_Bot?start={str(code)}")
 
 
@@ -152,13 +154,16 @@ async def letterMessage(message: types.Message, state: FSMContext):
             value = list(value)
             date = json.loads(value[3])
             date.append(i[1])
-            db.commit()
             sql.execute(f"UPDATE users SET idLetters = ? WHERE id = ?", (json.dumps(date), value[2]))
             db.commit()
-            if message.photo:
+            
+            if message.photo and message.photo:
+                photo = message.photo[-1].file_id
+                await bot.send_photo(i[1], photo=photo, caption=f"Хохохо🎅 Это новое пожелание от Тайного Санты!\n\n{message.text}")
+            elif message.photo:
                 photo = message.photo[-1].file_id
                 await bot.send_photo(i[1], photo=photo, caption=f"Хохохо🎅 Это новое пожелание от Тайного Санты!")
-            if message.text:
+            elif message.text:
                 await bot.send_message(i[1], f"Хохохо🎅 Это новое пожелание от Тайного Санты!\n{message.text}")
             await message.answer("Прекрасно! уже отправил поздравление!📧")
             await state.clear()
@@ -197,26 +202,30 @@ async def cmd_snow(message: types.Message):
 @dp.message(Command("mandarin"))
 async def cmd_mandrin(message: types.Message):
     value = get_user(message)
-    datet = datetime.now()
-    date = int(datet.strftime('%Y%m%d%H%M'))
+    date = datetime.now()
     mandarins = json.loads(value[6])
-    if date - mandarins[0] < 160:
-        time_free = date - mandarins[0] - 160
-        await message.answer(f'Тише тише... Отдохни от мандаринов\n\nПриходи через {str(time_free / 2)[1]} часов и {time_free - int(str((time_free / 2)[1]))} минут')
+    if datetime.fromtimestamp(mandarins[0]) + timedelta(hours=5) >= date:
+        time_free = str((datetime.fromtimestamp(mandarins[0]) + timedelta(hours=5) - date)).split(':', 2)[:4]
+        await message.answer(f'Тише тише... Отдохни от мандаринов\n\nПриходи через {time_free[0]} часов {time_free[1]} минут и {round(float(time_free[2]))} секунд')
         return
-    if random.randint(0, 100) <= 90:
+    if random.randint(0, 100) <= 90 or mandarins[1] <= 0:
         karma = random.randint(0, 10) if mandarins[1] == 0 else random.randint(0, round((mandarins[1] / 100) * 50))
     else:
         karma = -random.randint(0, 10) if mandarins[1] == 0 else random.randint(0, round((mandarins[1] / 100) * 10))
     mandarins[1] += karma
-    mandarins[0] = date
+    mandarins[0] = int(date.timestamp())
     sql.execute('UPDATE users SET mandarin = ? WHERE id = ?', (json.dumps(mandarins), message.from_user.id))
     db.commit()
     with open('mandarin.csv', 'r', encoding='utf-8') as file:
         reader = csv.reader(file)
         mandarin = list(reader)
         wish = mandarin[random.randint(1, len(mandarin)-1)]
-        await message.answer(f"{message.from_user.full_name} сегодня {f'собрал {karma} мандраринок и теперь их у тебя целых {mandarins[1]}! Они отлично дополнят новогодний стол!' if karma > 0 else f'не твой день... {karma} теперь у тебя всего лишь {mandarins[1]} мандаринок. В следующий раз у тебя точно получиться!'} \n\n\n {f'Судьба говорит что: {wish[0]}\n\nРедкость: {json.loads(mandarin[0][0])[str(wish[1])]}' if random.randint(0,1) == 1 else 'Судьба ничего не сказала...'}")
+        result = f'Судьба говорит что: {wish[0]} \nРедкость: {json.loads(mandarin[0][0])[str(wish[1])]}' if random.randint(0,1) == 1 else 'Судьба ничего не сказала...'
+         
+        await message.answer(f"""{message.from_user.full_name} сегодня {f'собрал {karma} мандраринок и теперь их у тебя целых {mandarins[1]}! Они отлично дополнят новогодний стол!' if karma > 0 else f'не твой день... {karma} теперь у тебя всего лишь {mandarins[1]} мандаринок. В следующий раз у тебя точно получиться!'} 
+        
+        
+        {result}""")
 
 @dp.message(Command("topchat"))
 async def cmd_topchat(message: types.Message):
@@ -272,7 +281,8 @@ async def call_notifications(call: types.CallbackQuery, state: FSMContext):
         token = secrets.token_urlsafe(10)
         sql.execute("UPDATE users SET tokenSanta = ? WHERE id = ?", (token, call.message.from_user.id))
         db.commit()
-        result = f'❄Ссылка успешно изменнна на https://t.me/ThisIsAtlas_Bot?start={str(value[0])+token}'
+        code = f'{str(value[0])}i{token}'
+        result = f'❄Ссылка успешно изменнна на https://t.me/ThisIsAtlas_Bot?start={code}'
     elif action == 'retime':
         await call.message.delete()
         builder = InlineKeyboardBuilder()
@@ -320,15 +330,33 @@ async def call_notifications(call: types.CallbackQuery, state: FSMContext):
         await call.message.answer("Действие отмененно")
     await state.clear()
 
+@dp.message(Command('monitor'))
+async def cmd_monitor(message: types.Message):
+    if message.from_user.id != admin_id:
+        return
+    if " " in message.text:
+        code = message.text.split()[1]
+        if code == 'get_db':
+            await bot.send_document(chat_id=message.chat.id, document=FSInputFile('user.db'))
+    else:
+        sql.execute('SELECT COUNT(*) FROM users')
+        await message.answer(text=f"Нагруженость хоста:\nЗагрузка CPU: {psutil.cpu_percent(interval=1)}%\nНагрузка на сеть: {psutil.net_io_counters()}\nКоличетсво юзеров: {list(sql.fetchone())[0]}")
+
+
 async def send_message_day():
     time.sleep(0.22)
-    day = 365 - datetime.now().timetuple().tm_yday
-    text = f"До нового года осталось🎄:\n{int(day)} дней 0 часов  0 минут 0 секунд"
-    if day == 0:
-        text = "С НОВЫМ ГОДОМ!🎆\nКанал автора бота: https:/t.me/AtlasForAmerica"
-
+    
     for value in sql.execute("SELECT * FROM users"):
-        if json.loads(list(value)[5])[0] == True:
+        settings = json.loads(list(value)[5])
+        if settings[0] == True:
+            desired_timezone = pytz.timezone(settings[2])
+            now_utc = datetime.now(pytz.utc)
+            dateCristmas = now_utc.astimezone(desired_timezone)
+            day = 365 - dateCristmas.timetuple().tm_yday
+            hour = 23 - dateCristmas.hour
+            minute = 59 - dateCristmas.minute
+            second = 60 - dateCristmas.second
+            text = f"До нового года осталось🎄:\n{int(day)} дней {int(hour)} часов {int(minute)} минут {int(second)} секунд" if day != 0 and hour != 0 and minute != 0 and second != 0 else "С НОВЫМ ГОДОМ!🎆\nКанал автора бота: https:/t.me/AtlasForAmerica"
             await bot.send_message(chat_id=value[0], text=text)
 
 
@@ -340,4 +368,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
