@@ -34,7 +34,7 @@ db = sqlite3.connect('user.db', check_same_thread = False)
 sql = db.cursor() 
 db.commit() 
 scheduler = AsyncIOScheduler()
-letterId = []
+letterId = {}
 musicFolder = os.listdir('music')
 musics = []
 admin_id = 990812913
@@ -54,6 +54,7 @@ def get_user(message):
     sql.execute(f"SELECT * FROM users WHERE id = ?", (message.from_user.id,))
     value = sql.fetchone()
     value = list(value)
+    print(message.chat.type)
     if message.chat.type == "group" or "supergroup":
         sql.execute(f"SELECT * FROM chats WHERE chat_id = ?", (message.chat.id,))
         if sql.fetchone() is None:
@@ -102,12 +103,12 @@ async def cmd_start(message: types.Message, state: FSMContext):
     if " " in message.text:
         code = message.text.split()[1]
         date = json.loads(value[4])
-        token = code.split('i')[0]
-        id = code.split('i')[1]
-        sql.execute(f"SELECT * FROM users WHERE idSanta = ?", (id))
+        token = code.split('i')[1]
+        id = code.split('i')[0]
+        sql.execute(f"SELECT * FROM users WHERE idSanta = ?", (id,))
         value = sql.fetchone()
-        value = list(value)
-        if value == None and value[1] != token:
+        value = list(value) if value != None else None
+        if value == None or value[1] != token:
             await message.answer("Ооу🤨 Кажеться такого пользователя не существует или ссылка не действительна")
             return
         if value[2] in date:
@@ -122,12 +123,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
             callback_data = "close_letter"
         ))
         await message.answer(f"Напиши мне свое пожелание которые ты хотел бы пожелать и я секретно передам человеку от которого ты получил ссылку😉", reply_markup=builder.as_markup())
-        a = 0
-        for i in letterId:
-            if i[0] == message.from_user.id:
-                letterId.pop(a)
-            a += 1
-        letterId.append([message.from_user.id, value[2]])
+        letterId[message.from_user.id] = value[2]
         await state.set_state(states.letter.state)
 
     else: 
@@ -146,29 +142,22 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
 @dp.message(states.letter)
 async def letterMessage(message: types.Message, state: FSMContext):
-    a = 0
-    for i in letterId:
-        if i[0] == message.from_user.id:
-            sql.execute(f"SELECT * FROM users WHERE id = ?", (message.from_user.id,))
-            value = sql.fetchone()
-            value = list(value)
-            date = json.loads(value[3])
-            date.append(i[1])
-            sql.execute(f"UPDATE users SET idLetters = ? WHERE id = ?", (json.dumps(date), value[2]))
-            db.commit()
-            
-            if message.photo and message.photo:
-                photo = message.photo[-1].file_id
-                await bot.send_photo(i[1], photo=photo, caption=f"Хохохо🎅 Это новое пожелание от Тайного Санты!\n\n{message.text}")
-            elif message.photo:
-                photo = message.photo[-1].file_id
-                await bot.send_photo(i[1], photo=photo, caption=f"Хохохо🎅 Это новое пожелание от Тайного Санты!")
-            elif message.text:
-                await bot.send_message(i[1], f"Хохохо🎅 Это новое пожелание от Тайного Санты!\n{message.text}")
-            await message.answer("Прекрасно! уже отправил поздравление!📧")
-            await state.clear()
-            return
-        a += 1
+    value = get_user(message)
+    if message.from_user.id in letterId:
+        recipient = letterId[message.from_user.id] 
+        date = json.loads(value[4])
+        date.append(recipient)
+        sql.execute(f"UPDATE users SET idLetters = ? WHERE id = ?", (json.dumps(date), value[2]))
+        db.commit()
+
+        if message.photo:
+            photo = message.photo[-1].file_id
+            await bot.send_photo(recipient, photo=photo, caption=f"Хохохо🎅 Это новое пожелание от Тайного Санты! {'' if message.caption is None else f'\n\n{message.caption}'}")
+        elif message.text:
+            await bot.send_message(recipient, f"Хохохо🎅 Это новое пожелание от Тайного Санты!\n{message.text}")
+        await message.answer("Прекрасно! уже отправил поздравление!📧")
+    await state.clear()
+           
 
 
 @dp.message(Command("music"))
@@ -204,8 +193,8 @@ async def cmd_mandrin(message: types.Message):
     value = get_user(message)
     date = datetime.now()
     mandarins = json.loads(value[6])
-    if datetime.fromtimestamp(mandarins[0]) + timedelta(hours=5) >= date:
-        time_free = str((datetime.fromtimestamp(mandarins[0]) + timedelta(hours=5) - date)).split(':', 2)[:4]
+    if datetime.fromtimestamp(mandarins[0]) + timedelta(hours=2) >= date:
+        time_free = str((datetime.fromtimestamp(mandarins[0]) + timedelta(hours=2) - date)).split(':', 2)[:4]
         await message.answer(f'Тише тише... Отдохни от мандаринов\n\nПриходи через {time_free[0]} часов {time_free[1]} минут и {round(float(time_free[2]))} секунд')
         return
     if random.randint(0, 100) <= 90 or mandarins[1] <= 0:
@@ -338,6 +327,14 @@ async def cmd_monitor(message: types.Message):
         code = message.text.split()[1]
         if code == 'get_db':
             await bot.send_document(chat_id=message.chat.id, document=FSInputFile('user.db'))
+        if code == 'set_db':
+            try:
+                print(message.text.split('set_db', 1)[1][1:])
+                sql.execute(message.text.split('set_db', 1)[1][1:])
+                result = sql.fetchone()
+            except Exception as error:
+                await message.answer(f"Error: {error}")
+            await message.answer(str(result))
     else:
         sql.execute('SELECT COUNT(*) FROM users')
         await message.answer(text=f"Нагруженость хоста:\nЗагрузка CPU: {psutil.cpu_percent(interval=1)}%\nНагрузка на сеть: {psutil.net_io_counters()}\nКоличетсво юзеров: {list(sql.fetchone())[0]}")
@@ -347,7 +344,9 @@ async def send_message_day():
     time.sleep(0.22)
     
     for value in sql.execute("SELECT * FROM users"):
-        settings = json.loads(list(value)[5])
+        value = list(value)
+        settings = json.loads(value[5])
+        print(value[2])
         if settings[0] == True:
             desired_timezone = pytz.timezone(settings[2])
             now_utc = datetime.now(pytz.utc)
@@ -357,12 +356,12 @@ async def send_message_day():
             minute = 59 - dateCristmas.minute
             second = 60 - dateCristmas.second
             text = f"До нового года осталось🎄:\n{int(day)} дней {int(hour)} часов {int(minute)} минут {int(second)} секунд" if day != 0 and hour != 0 and minute != 0 and second != 0 else "С НОВЫМ ГОДОМ!🎆\nКанал автора бота: https:/t.me/AtlasForAmerica"
-            await bot.send_message(chat_id=value[0], text=text)
+            await bot.send_message(chat_id=value[2], text=text)
 
 
 
 async def main():
-    scheduler.add_job(send_message_day,'cron', day="*", hour=0, minute=0)
+    scheduler.add_job(send_message_day,'cron', day="*", hour=0cmd, minute=0)
     scheduler.start()
     await dp.start_polling(bot)
 

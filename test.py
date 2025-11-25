@@ -6,14 +6,10 @@ import random
 import json
 import pytz
 
-delta = timedelta(hours=5)
 
-try:
-    desired_timezone = pytz.timezone('Europe/Kyiv')
-except:
-    print('error timezone')
-    
 
-date = datetime.now()
+my_string = "apple banana for orange"
+symbol = "-"
+text_before_symbol = my_string.split('banana', 1)[1][1:]
+print(text_before_symbol)
 
-print(int(date.timestamp()))
