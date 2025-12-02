@@ -24,22 +24,23 @@ from aiogram.exceptions import TelegramBadRequest
 import psutil
 
 logging.basicConfig(level=logging.INFO)
-#8108818471:AAFlQ4YS8jiXS9tz11Z5qICIWrtQoUnEFcs official
-#7323299180:AAGI8BXbwCxAjqz7umINVHVPrunnp-onASQ test
+#8108818471:AAFlQ4YS8jiXS9tz11Z5qICIWrtQoUnEFcs
 bot = Bot(token="7323299180:AAGI8BXbwCxAjqz7umINVHVPrunnp-onASQ")
 dp = Dispatcher()
 
+admin_id = 990812913
 
 db = sqlite3.connect('user.db', check_same_thread = False)
 sql = db.cursor() 
 db.commit() 
 scheduler = AsyncIOScheduler()
 letterId = {}
-musicFolder = os.listdir('music')
-musics = []
-admin_id = 990812913
-for music in musicFolder:
-    musics.append(FSInputFile(f'music/{music}'))
+musicFolder = os.listdir('assets/music')
+musics = [FSInputFile(f'assets/music/{music}') for music in musicFolder]
+
+photoFolder = os.listdir('assets/photo')
+photos = [FSInputFile(f'assets/photo/{photo}') for photo in photoFolder]
+
 
 
 class states(StatesGroup):
@@ -54,8 +55,7 @@ def get_user(message):
     sql.execute(f"SELECT * FROM users WHERE id = ?", (message.from_user.id,))
     value = sql.fetchone()
     value = list(value)
-    print(message.chat.type)
-    if message.chat.type == "group" or "supergroup":
+    if message.chat.type in ["group", "supergroup"]:
         sql.execute(f"SELECT * FROM chats WHERE chat_id = ?", (message.chat.id,))
         if sql.fetchone() is None:
             sql.execute("INSERT INTO chats VALUES (?,?)", (message.chat.id, json.dumps([message.from_user.id])))
@@ -122,12 +122,13 @@ async def cmd_start(message: types.Message, state: FSMContext):
             text="Отмена",
             callback_data = "close_letter"
         ))
-        await message.answer(f"Напиши мне свое пожелание которые ты хотел бы пожелать и я секретно передам человеку от которого ты получил ссылку😉", reply_markup=builder.as_markup())
+        await message.answer(f"Напиши мне свое пожелание которые ты хотел бы пожелать и я секретно передам человеку от которого ты получил ссылку😉\n\n🎄Поддерживаються: обычные сообщеия, фото, видео, файлы, аудио, кружки, голосовые (важно что нельзя отправлять больше одного фото или видео в сообщении)", reply_markup=builder.as_markup())
         letterId[message.from_user.id] = value[2]
         await state.set_state(states.letter.state)
 
     else: 
         builder = InlineKeyboardBuilder()
+
         desired_timezone = pytz.timezone(json.loads(value[5])[2])
         now_utc = datetime.now(pytz.utc)
         dateCristmas = now_utc.astimezone(desired_timezone)
@@ -136,7 +137,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
         minute = 59 - dateCristmas.minute
         second = 60 - dateCristmas.second
         code = f'{str(value[0])}i{value[1]}'
-        await message.answer(f"До нового года осталось🎄:\n{day} дней {hour} часов  {minute} минут {second} секунд!\n\nСсылка для вашей Тайной Санты🎅: https://t.me/ThisIsAtlas_Bot?start={str(code)}")
+        await bot.send_photo(message.chat.id, photo=photos[random.randint(0, len(photos)-1)], caption=f"До нового года осталось🎄:\n{day} дней {hour} часов  {minute} минут {second} секунд!\n\nСсылка для вашей Тайной Санты🎅: https://t.me/ThisIsAtlas_Bot?start={str(code)}")
 
 
 
@@ -144,18 +145,42 @@ async def cmd_start(message: types.Message, state: FSMContext):
 async def letterMessage(message: types.Message, state: FSMContext):
     value = get_user(message)
     if message.from_user.id in letterId:
+        if message.media_group_id:
+            builder = InlineKeyboardBuilder()
+            builder.add(types.InlineKeyboardButton(
+                text="Отмена",
+            callback_data = "close_letter"
+            ))
+            await message.answer(f"Ооу🤨 Но несколько медиа нельзя загружать\n\nПовтори еще раз только читай правила!", reply_markup=builder.as_markup())
+            return
         recipient = letterId[message.from_user.id] 
         date = json.loads(value[4])
+        
+        if message.photo:
+            file = message.photo[-1].file_id
+            await bot.send_photo(recipient, photo=file, caption=f"Хохохо🎅 Это новое пожелание от Тайного Санты! {'' if message.caption is None else f'\n\n{message.caption}'}")
+        elif message.video:
+            file = message.video.file_id
+            await bot.send_video(recipient, video=file, caption=f"Хохохо🎅 Это новое пожелание от Тайного Санты! {'' if message.caption is None else f'\n\n{message.caption}'}")
+        elif message.document:
+            file = message.document.file_id
+            await bot.send_document(recipient, document=file, caption=f"Хохохо🎅 Это новое пожелание от Тайного Санты! {'' if message.caption is None else f'\n\n{message.caption}'}") 
+        elif message.audio:
+            file = message.audio.file_id
+            await bot.send_audio(recipient, audio=file, caption=f"Хохохо🎅 Это новое пожелание от Тайного Санты! {'' if message.caption is None else f'\n\n{message.caption}'}") 
+        elif message.voice:
+            file = message.voice.file_id
+            await bot.send_voice(recipient, voice=file, caption=f"Хохохо🎅 Это новое пожелание от Тайного Санты! {'' if message.caption is None else f'\n\n{message.caption}'}") 
+        elif message.video_note:
+            file = message.video_note.file_id
+            await bot.send_video_note(recipient, video_note=file)
+            await bot.send_message(recipient, f"Хохохо🎅 Это новое пожелание от Тайного Санты!") 
+        elif message.text:
+            await bot.send_message(recipient, f"Хохохо🎅 Это новое пожелание от Тайного Санты!\n\n{message.text}")
+        await message.answer("Прекрасно! уже отправил поздравление!📧")
         date.append(recipient)
         sql.execute(f"UPDATE users SET idLetters = ? WHERE id = ?", (json.dumps(date), value[2]))
         db.commit()
-
-        if message.photo:
-            photo = message.photo[-1].file_id
-            await bot.send_photo(recipient, photo=photo, caption=f"Хохохо🎅 Это новое пожелание от Тайного Санты! {'' if message.caption is None else f'\n\n{message.caption}'}")
-        elif message.text:
-            await bot.send_message(recipient, f"Хохохо🎅 Это новое пожелание от Тайного Санты!\n{message.text}")
-        await message.answer("Прекрасно! уже отправил поздравление!📧")
     await state.clear()
            
 
@@ -164,7 +189,7 @@ async def letterMessage(message: types.Message, state: FSMContext):
 async def cmd_music(message: types.Message):
     value = get_user(message)
     audio = musics[random.randint(0, len(musics)-1)]
-    await bot.send_audio(message.chat.id, audio)
+    await bot.send_audio(message.chat.id, audio=audio, caption="❄🎶Твоя новогодняя музыка уже сегодня!")
 
 @dp.message(Command("snow"))
 async def cmd_snow(message: types.Message):
@@ -182,7 +207,7 @@ async def cmd_snow(message: types.Message):
         if i['dt_txt'][:10] != date:
             day += 1
             if "snow" in i['weather'][0]['description']:
-                await message.answer(f"Ого☃! У тебя выпадет снег через {day} дней!❄")
+                await message.answer(f"Ого☃! У тебя выпадет снег через {day if day != 0 or 1 else ['сегодня', 'завтра'][day]} дней!❄")
                 return
             date = i['dt_txt'][:10]
     
@@ -195,30 +220,31 @@ async def cmd_mandrin(message: types.Message):
     mandarins = json.loads(value[6])
     if datetime.fromtimestamp(mandarins[0]) + timedelta(hours=2) >= date:
         time_free = str((datetime.fromtimestamp(mandarins[0]) + timedelta(hours=2) - date)).split(':', 2)[:4]
-        await message.answer(f'Тише тише... Отдохни от мандаринов\n\nПриходи через {time_free[0]} часов {time_free[1]} минут и {round(float(time_free[2]))} секунд')
+        await message.answer(f'🧊Тише тише... Отдохни от мандаринов\n\nПриходи через {time_free[0]} часов {time_free[1]} минут и {round(float(time_free[2]))} секунд')
         return
     if random.randint(0, 100) <= 90 or mandarins[1] <= 0:
-        karma = random.randint(0, 10) if mandarins[1] == 0 else random.randint(0, round((mandarins[1] / 100) * 50))
+        karma = random.randint(1, 10) if mandarins[1] <= 1 else random.randint(0, round((mandarins[1] / 100) * 50))
     else:
         karma = -random.randint(0, 10) if mandarins[1] == 0 else random.randint(0, round((mandarins[1] / 100) * 10))
     mandarins[1] += karma
-    mandarins[0] = int(date.timestamp())
+    #mandarins[0] = int(date.timestamp())
     sql.execute('UPDATE users SET mandarin = ? WHERE id = ?', (json.dumps(mandarins), message.from_user.id))
     db.commit()
     with open('mandarin.csv', 'r', encoding='utf-8') as file:
         reader = csv.reader(file)
         mandarin = list(reader)
         wish = mandarin[random.randint(1, len(mandarin)-1)]
-        result = f'Судьба говорит что: {wish[0]} \nРедкость: {json.loads(mandarin[0][0])[str(wish[1])]}' if random.randint(0,1) == 1 else 'Судьба ничего не сказала...'
+        result = f'🌠Судьба говорит что: {wish[0]} \nРедкость: {json.loads(mandarin[0][0])[str(wish[1])]}' if random.randint(0,1) == 1 else '💤Судьба ничего не сказала...'
          
-        await message.answer(f"""{message.from_user.full_name} сегодня {f'собрал {karma} мандраринок и теперь их у тебя целых {mandarins[1]}! Они отлично дополнят новогодний стол!' if karma > 0 else f'не твой день... {karma} теперь у тебя всего лишь {mandarins[1]} мандаринок. В следующий раз у тебя точно получиться!'} 
+        await message.answer(f"""🍊{message.from_user.full_name} сегодня {f'собрал {karma} мандраринок и теперь их у тебя целых {mandarins[1]}! Они отлично дополнят новогодний стол!' if karma > 0 else f'не твой день... {karma} теперь у тебя всего лишь {mandarins[1]} мандаринок. В следующий раз у тебя точно получиться!'} 
         
         
         {result}""")
 
 @dp.message(Command("topchat"))
 async def cmd_topchat(message: types.Message):
-    if message.chat.type == "group" or "supergroup":
+    value = get_user(message)
+    if message.chat.type in ["group", "supergroup"]:
         sql.execute(f"SELECT * FROM chats WHERE chat_id = ?", (message.chat.id,))
         value = sql.fetchone()
         if value != None:
@@ -235,21 +261,18 @@ async def cmd_topchat(message: types.Message):
             lidersText = ''
             for u in range(7 if len(liders) >= 7 else len(liders)):
                 lidersText += f'{u+1}. {liders[u][1]} ({liders[u][2]} мандаринок)\n'
-            await message.answer(f'Лучшие мастера в мандаринах этого чата:\n\n{lidersText}')
+            await message.answer(f'🍊Лучшие мастера в мандаринах этого чата:\n\n{lidersText}')
 
 
 @dp.message(Command("top"))
 async def cmd_topchat(message: types.Message):
-    liders = []
-    for value in sql.execute("SELECT * FROM users"):
-        value = list(value)
-        liders.append([value[0], value[3], json.loads(value[6])[1]])
-            
+    value = get_user(message)
+    liders = [[value[0], value[3], json.loads(value[6])[1]] for value in list(sql.execute("SELECT * FROM users"))]
     liders.sort(key=lambda x: x[2], reverse=True)
     lidersText = ''
     for u in range(7 if len(liders) >= 7 else len(liders)):
         lidersText += f'{u+1}. {liders[u][1]} ({liders[u][2]} мандаринок)\n'
-    await message.answer(f'Лучшие мастера в мандаринах:\n\n{lidersText}')
+    await message.answer(f'🍊Лучшие мастера в мандаринах:\n\n{lidersText}')
 
 
 
@@ -329,7 +352,6 @@ async def cmd_monitor(message: types.Message):
             await bot.send_document(chat_id=message.chat.id, document=FSInputFile('user.db'))
         if code == 'set_db':
             try:
-                print(message.text.split('set_db', 1)[1][1:])
                 sql.execute(message.text.split('set_db', 1)[1][1:])
                 result = sql.fetchone()
             except Exception as error:
@@ -346,7 +368,7 @@ async def send_message_day():
     for value in sql.execute("SELECT * FROM users"):
         value = list(value)
         settings = json.loads(value[5])
-        print(value[2])
+
         if settings[0] == True:
             desired_timezone = pytz.timezone(settings[2])
             now_utc = datetime.now(pytz.utc)
@@ -355,13 +377,13 @@ async def send_message_day():
             hour = 23 - dateCristmas.hour
             minute = 59 - dateCristmas.minute
             second = 60 - dateCristmas.second
-            text = f"До нового года осталось🎄:\n{int(day)} дней {int(hour)} часов {int(minute)} минут {int(second)} секунд" if day != 0 and hour != 0 and minute != 0 and second != 0 else "С НОВЫМ ГОДОМ!🎆\nКанал автора бота: https:/t.me/AtlasForAmerica"
+            text = f"До нового года осталось🎄:\n{int(day)} дней {int(hour)} часов {int(minute)} минут {int(second)} секунд" if day > 0 and hour > 0 and minute > 0 and second > 0 else "С НОВЫМ ГОДОМ!🎆\nКанал автора бота: https:/t.me/AtlasForAmerica"
             await bot.send_message(chat_id=value[2], text=text)
 
 
 
 async def main():
-    scheduler.add_job(send_message_day,'cron', day="*", hour=0cmd, minute=0)
+    scheduler.add_job(send_message_day,'cron', day="*", hour=0, minute=0)
     scheduler.start()
     await dp.start_polling(bot)
 
