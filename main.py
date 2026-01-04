@@ -23,13 +23,14 @@ from contextlib import suppress
 from aiogram.exceptions import TelegramBadRequest
 import psutil
 
+with open('settings.json', 'r') as file:
+    settingsDat = json.load(file)
+
 logging.basicConfig(level=logging.INFO)
-#8108818471:AAFlQ4YS8jiXS9tz11Z5qICIWrtQoUnEFcs
-bot = Bot(token="7323299180:AAGI8BXbwCxAjqz7umINVHVPrunnp-onASQ")
+bot = Bot(token=settingsDat["tokenBot"])
 dp = Dispatcher()
 
-admin_id = 990812913
-
+admin_id = settingsDat["idAdmin"]
 db = sqlite3.connect('user.db', check_same_thread = False)
 sql = db.cursor() 
 db.commit() 
@@ -132,7 +133,8 @@ async def cmd_start(message: types.Message, state: FSMContext):
         desired_timezone = pytz.timezone(json.loads(value[5])[2])
         now_utc = datetime.now(pytz.utc)
         dateCristmas = now_utc.astimezone(desired_timezone)
-        day = 365 - dateCristmas.timetuple().tm_yday
+        year = dateCristmas.timetuple().tm_year
+        day = 366 if year % 400 == 0 else 365 - dateCristmas.timetuple().tm_yday
         hour = 23 - dateCristmas.hour
         minute = 59 - dateCristmas.minute
         second = 60 - dateCristmas.second
@@ -196,7 +198,7 @@ async def cmd_snow(message: types.Message):
     value = get_user(message)
     time.sleep(0.2)
     city = message.text.split()[1]
-    res = requests.get('http://api.openweathermap.org/data/2.5/forecast', params={'q': f'{city}', 'type': 'like', 'units': 'metric', 'APPID': '2b845cde2521735273dfaba14ada0b8f'})
+    res = requests.get('http://api.openweathermap.org/data/2.5/forecast', params={'q': f'{city}', 'type': 'like', 'units': 'metric', 'APPID': settingsDat["tokenWeather"]})
     data = res.json()
     if data['cod'] != '200':
         await message.answer('Ошибка! Твой город не найден!😨\nПопбробуй ввести название на англиском, а еще лучше с аббревиатурой страны❗\nНапример:\nOdesa,UA\nKyiv,UA\nOttava,CA\nAkita,JP')
@@ -227,7 +229,7 @@ async def cmd_mandrin(message: types.Message):
     else:
         karma = -random.randint(0, 10) if mandarins[1] == 0 else random.randint(0, round((mandarins[1] / 100) * 10))
     mandarins[1] += karma
-    #mandarins[0] = int(date.timestamp())
+    mandarins[0] = int(date.timestamp())
     sql.execute('UPDATE users SET mandarin = ? WHERE id = ?', (json.dumps(mandarins), message.from_user.id))
     db.commit()
     with open('mandarin.csv', 'r', encoding='utf-8') as file:
@@ -359,7 +361,7 @@ async def cmd_monitor(message: types.Message):
             await message.answer(str(result))
     else:
         sql.execute('SELECT COUNT(*) FROM users')
-        await message.answer(text=f"Нагруженость хоста:\nЗагрузка CPU: {psutil.cpu_percent(interval=1)}%\nНагрузка на сеть: {psutil.net_io_counters()}\nКоличетсво юзеров: {list(sql.fetchone())[0]}")
+        await message.answer(text=f"Нагруженость хоста:\nЗагрузка CPU: {psutil.cpu_percent(interval=1)}%\nКоличетсво юзеров: {list(sql.fetchone())[0]}")
 
 
 async def send_message_day():
@@ -373,11 +375,12 @@ async def send_message_day():
             desired_timezone = pytz.timezone(settings[2])
             now_utc = datetime.now(pytz.utc)
             dateCristmas = now_utc.astimezone(desired_timezone)
-            day = 365 - dateCristmas.timetuple().tm_yday
+            year = dateCristmas.timetuple().tm_year
+            day = 366 if year % 400 == 0 else 365 - dateCristmas.timetuple().tm_yday
             hour = 23 - dateCristmas.hour
             minute = 59 - dateCristmas.minute
             second = 60 - dateCristmas.second
-            text = f"До нового года осталось🎄:\n{int(day)} дней {int(hour)} часов {int(minute)} минут {int(second)} секунд" if day > 0 and hour > 0 and minute > 0 and second > 0 else "С НОВЫМ ГОДОМ!🎆\nКанал автора бота: https:/t.me/AtlasForAmerica"
+            text = f"До нового года осталось🎄:\n{int(day)} дней {int(hour)} часов {int(minute)} минут {int(second)} секунд" if dateCristmas.timetuple().tm_yday == 1 else "С НОВЫМ ГОДОМ!🎆\nКанал автора бота: https:/t.me/AtlasForAmerica"
             await bot.send_message(chat_id=value[2], text=text)
 
 
