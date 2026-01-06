@@ -23,17 +23,17 @@ from contextlib import suppress
 from aiogram.exceptions import TelegramBadRequest
 import psutil
 
-with open('settings.json', 'r') as file:
+with open('settings.json', 'r') as file: #Load Settings File
     settingsDat = json.load(file)
 
 logging.basicConfig(level=logging.INFO)
-bot = Bot(token=settingsDat["tokenBot"])
-dp = Dispatcher()
 
+
+bot = Bot(token=settingsDat["tokenBot"])
 admin_id = settingsDat["idAdmin"]
 db = sqlite3.connect('user.db', check_same_thread = False)
+dp = Dispatcher()
 sql = db.cursor() 
-db.commit() 
 scheduler = AsyncIOScheduler()
 letterId = {}
 musicFolder = os.listdir('assets/music')
@@ -48,7 +48,7 @@ class states(StatesGroup):
     letter = State()
     retime = State()
 
-def get_user(message):
+def get_user(message): #Function for get user get_user(his message)
     sql.execute(f"SELECT * FROM users WHERE id = ?", (message.from_user.id,))
     if sql.fetchone() is None:
         sql.execute("INSERT INTO users VALUES (?,?,?,?,?,?,?)", (None, secrets.token_urlsafe(10), message.from_user.id, message.from_user.full_name, json.dumps([]), json.dumps([True, True, 'Europe/Kyiv']), json.dumps([0, 0])))
@@ -75,7 +75,7 @@ def get_user(message):
     return value
 
 
-def settings_button(value):
+def settings_button(value): #Generate buttons for settings
     settings = json.loads(value[5])
     builder = InlineKeyboardBuilder()
     builder.add(types.InlineKeyboardButton(
@@ -139,7 +139,8 @@ async def cmd_start(message: types.Message, state: FSMContext):
         minute = 59 - dateCristmas.minute
         second = 60 - dateCristmas.second
         code = f'{str(value[0])}i{value[1]}'
-        await bot.send_photo(message.chat.id, photo=photos[random.randint(0, len(photos)-1)], caption=f"До нового года осталось🎄:\n{day} дней {hour} часов  {minute} минут {second} секунд!\n\nСсылка для вашей Тайной Санты🎅: https://t.me/ThisIsAtlas_Bot?start={str(code)}")
+        myBot = await bot.get_me()
+        await bot.send_photo(message.chat.id, photo=photos[random.randint(0, len(photos)-1)], caption=f"До нового года осталось🎄:\n{day} дней {hour} часов  {minute} минут {second} секунд!\n\nСсылка для вашей Тайной Санты🎅: https://t.me/{myBot.username}?start={str(code)}")
 
 
 
@@ -296,7 +297,8 @@ async def call_notifications(call: types.CallbackQuery, state: FSMContext):
         sql.execute("UPDATE users SET tokenSanta = ? WHERE id = ?", (token, call.message.from_user.id))
         db.commit()
         code = f'{str(value[0])}i{token}'
-        result = f'❄Ссылка успешно изменнна на https://t.me/ThisIsAtlas_Bot?start={code}'
+        myBot = await bot.get_me()
+        result = f'❄Ссылка успешно изменнна на https://t.me/{myBot.username}?start={code}'
     elif action == 'retime':
         await call.message.delete()
         builder = InlineKeyboardBuilder()
@@ -304,7 +306,7 @@ async def call_notifications(call: types.CallbackQuery, state: FSMContext):
             text="Отмена",
             callback_data = "close_retime"
         ))
-        await call.message.answer(f"Отправь мне свой часовой пояс в формате Part_of_the_world/City \nПримеры:\nAmirica/New_York\nEurope/Kyiv\nEurope/Moscow")
+        await call.message.answer(f"Отправь мне свой часовой пояс в формате Part_of_the_world/City \nПримеры:\nAmerica/New_York\nEurope/Kyiv\nEurope/Moscow")
         await state.set_state(states.retime.state)
         return
     else:
@@ -319,6 +321,7 @@ async def call_notifications(call: types.CallbackQuery, state: FSMContext):
 @dp.message(states.retime)
 async def cmd_retime(message: types.Message, state: FSMContext):
     result = ''
+    value = get_user(message)
     try:
         desired_timezone = pytz.timezone(message.text)
         value = get_user(message)
@@ -366,7 +369,6 @@ async def cmd_monitor(message: types.Message):
 
 async def send_message_day():
     time.sleep(0.22)
-    
     for value in sql.execute("SELECT * FROM users"):
         value = list(value)
         settings = json.loads(value[5])
@@ -386,9 +388,11 @@ async def send_message_day():
 
 
 async def main():
+    
     scheduler.add_job(send_message_day,'cron', day="*", hour=0, minute=0)
     scheduler.start()
     await dp.start_polling(bot)
+
 
 if __name__ == "__main__":
     asyncio.run(main())

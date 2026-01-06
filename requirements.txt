@@ -1,0 +1,6 @@
+aiogram,
+pytz,
+apscheduler,
+secrets,
+contextlib,
+psutil
